@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { Card, CardContent } from '../../components/ui/card';
-import { MapPin, Search, UtensilsCrossed, Star, ArrowRight } from 'lucide-react';
+import { Search, UtensilsCrossed, Star, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 
 export default function Landing() {
