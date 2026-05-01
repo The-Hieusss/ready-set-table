@@ -8,7 +8,7 @@ import { Button } from '../../components/ui/button';
 import { ArrowLeft, Loader2, Calendar } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
-type ReservationWithUser = Reservation & { users: { name: string, email: string } };
+type ReservationWithUser = Reservation & { users?: { full_name?: string } };
 
 export default function OwnerReservationsList() {
   const { id } = useParams<{ id: string }>();
@@ -17,12 +17,17 @@ export default function OwnerReservationsList() {
   const [restaurantName, setRestaurantName] = useState('');
 
   const fetchReservations = async () => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+
     try {
       // Get restaurant name
       const { data: restData } = await supabase
         .from('restaurants')
         .select('name')
-        .eq('restaurant_id', id)
+        .eq('id', id)
         .single();
         
       if (restData) setRestaurantName(restData.name);
@@ -31,7 +36,7 @@ export default function OwnerReservationsList() {
         .from('reservations')
         .select(`
           *,
-          users ( name, email )
+          users ( full_name )
         `)
         .eq('restaurant_id', id)
         .order('reservation_date', { ascending: false });
@@ -92,12 +97,11 @@ export default function OwnerReservationsList() {
                 </TableRow>
               ) : (
                 reservations.map(res => (
-                  <TableRow key={res.reservation_id}>
+                  <TableRow key={res.reservation_id ?? res.id}>
                     <TableCell className="font-semibold">
-                      {res.users?.name || 'Unknown'}
-                      <div className="text-sm font-normal text-muted-foreground">{res.users?.email}</div>
+                      {res.users?.full_name || 'Unknown'}
                     </TableCell>
-                    <TableCell>{format(parseISO(res.reservation_date), 'MMM d, yyyy')}</TableCell>
+                    <TableCell>{res.reservation_date ? format(parseISO(res.reservation_date), 'MMM d, yyyy') : 'Unknown date'}</TableCell>
                     <TableCell>{res.reservation_time}</TableCell>
                     <TableCell>{res.party_size} People</TableCell>
                     <TableCell>

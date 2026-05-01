@@ -1,131 +1,102 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { supabase, type UserRole } from '../../lib/supabase';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { toast } from 'sonner';
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
-export default function Signup() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState<UserRole>('customer');
-  const [loading, setLoading] = useState(false);
+import { useAuth, type UserRole } from "../../components/AuthProvider";
+
+export function SignupPage() {
+  const { signUp, loading } = useAuth();
   const navigate = useNavigate();
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-
-      if (data.user) {
-        // Create user record in our generic users table
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert({
-            user_id: data.user.id, // Explicitly linking Supabase Auth ID
-            name,
-            email,
-            password: 'Managed by Supabase Auth', // since schema requested password
-            role,
-          });
-
-        if (insertError) {
-          toast.error('Failed to create user profile.');
-          console.error(insertError);
-        } else {
-          toast.success('Account created successfully!');
-          navigate('/');
-        }
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'An error occurred during sign up.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Create an Account</CardTitle>
-          <CardDescription>Join Ready Set Table to book or list restaurants</CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSignup}>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="John Doe"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
+    <section className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="glass-card rounded-[36px] p-8">
+        <h1 className="text-3xl font-semibold tracking-tight text-white">Create account</h1>
+        <p className="mt-3 max-w-lg text-sm leading-7 text-[var(--text-muted)]">
+          Join as a diner or owner. The new UI keeps both roles inside one darker, more focused hospitality shell while preserving the existing auth flow.
+        </p>
+
+        <form
+          className="mt-8 space-y-4"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setError(null);
+            const formData = new FormData(event.currentTarget);
+
+            try {
+              await signUp({
+                fullName: String(formData.get("fullName") ?? ""),
+                email: String(formData.get("email") ?? ""),
+                password: String(formData.get("password") ?? ""),
+                role: String(formData.get("role") ?? "customer") as UserRole,
+              });
+              navigate("/dashboard", { replace: true });
+            } catch (caught) {
+              setError(caught instanceof Error ? caught.message : "Unable to create account.");
+            }
+          }}
+        >
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-white/[0.72]">Full name</span>
+            <input name="fullName" className="field" placeholder="Maya Lin" />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-white/[0.72]">Email</span>
+            <input name="email" type="email" className="field" placeholder="you@example.com" />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-white/[0.72]">Password</span>
+            <input name="password" type="password" className="field" placeholder="••••••••" />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-white/[0.72]">Role</span>
+            <select name="role" className="field">
+              <option value="customer">Customer</option>
+              <option value="owner">Owner</option>
+            </select>
+          </label>
+
+          {error ? (
+            <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+              {error}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">I am a...</Label>
-              <Select value={role} onValueChange={(val: UserRole) => setRole(val)}>
-                <SelectTrigger id="role" className="w-full">
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="customer">Customer (Diner)</SelectItem>
-                  <SelectItem value="owner">Restaurant Owner</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating account...' : 'Create account'}
-            </Button>
-            <div className="text-sm text-center text-muted-foreground">
-              Already have an account?{' '}
-              <Link to="/login" className="text-primary hover:underline">
-                Log in
-              </Link>
-            </div>
-          </CardFooter>
+          ) : null}
+
+          <button type="submit" disabled={loading} className="btn-gold w-full disabled:opacity-60">
+            {loading ? "Creating account…" : "Create account"}
+          </button>
         </form>
-      </Card>
+
+        <p className="mt-6 text-sm text-[var(--text-muted)]">
+          Already have an account?{" "}
+          <Link to="/login" className="font-medium text-[#7ad5d6]">
+            Log in
+          </Link>
+        </p>
+      </div>
+
+      <div className="glass-card rounded-[36px] p-8">
+        <p className="section-label">One platform</p>
+        <div className="mt-6 space-y-4">
+          <FeatureCard
+            title="Customers"
+            body="Browse restaurants, reserve faster, and revisit past bookings from a cleaner personal dashboard."
+          />
+          <FeatureCard
+            title="Owners"
+            body="Track reservations, ratings, and review volume from the same product language used on the guest side."
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FeatureCard({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="glass-card-soft rounded-[24px] p-5">
+      <p className="text-lg font-semibold text-white">{title}</p>
+      <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">{body}</p>
     </div>
   );
 }

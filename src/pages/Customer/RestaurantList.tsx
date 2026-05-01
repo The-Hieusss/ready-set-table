@@ -1,187 +1,151 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { supabase, Restaurant } from '../../lib/supabase';
-import { RestaurantCard } from '../../components/RestaurantCard';
-import { Input } from '../../components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Button } from '../../components/ui/button';
-import { Loader2, Search } from 'lucide-react';
+import { Filter, LayoutGrid, List, Map } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
-export default function RestaurantList() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialQuery = searchParams.get('q') || '';
-  
-  const [restaurants, setRestaurants] = useState<(Restaurant & { avg_rating?: number, review_count?: number })[]>([]);
+import { RestaurantCard } from "../../components/RestaurantCard";
+import { getRestaurants, type Restaurant } from "../../lib/supabase";
+
+export function RestaurantListPage() {
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  
-  const [searchQuery, setSearchQuery] = useState(initialQuery);
-  const [cuisineFilter, setCuisineFilter] = useState('all');
-  const [ratingFilter, setRatingFilter] = useState('all');
-
-  const fetchRestaurants = async () => {
-    setLoading(true);
-    try {
-      // Build query
-      let query = supabase.from('restaurants').select(`
-        *,
-        reviews ( rating )
-      `);
-
-      if (searchQuery) {
-        query = query.or(`name.ilike.%${searchQuery}%,address.ilike.%${searchQuery}%,cuisine_type.ilike.%${searchQuery}%`);
-      }
-
-      if (cuisineFilter !== 'all') {
-        query = query.eq('cuisine_type', cuisineFilter);
-      }
-
-      const { data, error } = await query;
-      
-      if (error) throw error;
-
-      // Calculate avg ratings manually since Supabase doesn't support aggregate functions easily in JS client without RPC
-      let processed = data.map(r => {
-        const reviews = r.reviews as {rating: number}[] || [];
-        const avg = reviews.length ? reviews.reduce((a, b) => a + b.rating, 0) / reviews.length : 0;
-        return { ...r, avg_rating: avg, review_count: reviews.length };
-      });
-
-      if (ratingFilter !== 'all') {
-        const minRating = Number(ratingFilter);
-        processed = processed.filter(r => (r.avg_rating || 0) >= minRating);
-      }
-
-      setRestaurants(processed);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    fetchRestaurants();
-  }, [cuisineFilter, ratingFilter]);
+    getRestaurants()
+      .then(setRestaurants)
+      .finally(() => setLoading(false));
+  }, []);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newParams = new URLSearchParams(searchParams);
-    if (searchQuery) newParams.set('q', searchQuery);
-    else newParams.delete('q');
-    setSearchParams(newParams);
-    fetchRestaurants();
-  };
+  const filteredRestaurants = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) {
+      return restaurants;
+    }
+
+    return restaurants.filter((restaurant) =>
+      [restaurant.name, restaurant.address, restaurant.city, restaurant.cuisine]
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [restaurants, search]);
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Find Restaurants</h1>
-          <p className="text-muted-foreground mt-2">Discover and book the best tables in town.</p>
-        </div>
+    <section className="space-y-8">
+      <div className="max-w-3xl">
+        <p className="section-label">Browse & discover</p>
+        <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+          Culinary discoveries
+        </h1>
+        <p className="mt-4 text-base leading-7 text-[var(--text-muted)]">
+          Discover restaurants through a faster search surface and a cleaner browse layout, while keeping the live data layer underneath.
+        </p>
       </div>
 
-      <div className="bg-card border rounded-lg p-4 mb-8 shadow-sm">
-        <form onSubmit={handleSearchSubmit} className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
-            <Input 
-              placeholder="Search by name or address..." 
-              className="pl-10 h-11"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+      <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
+        <aside className="glass-card h-fit rounded-[28px] p-6 lg:sticky lg:top-28">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-white">Filters</h2>
+            <Filter className="h-5 w-5 text-[#7ad5d6]" />
           </div>
-          <div className="flex gap-4 w-full md:w-auto">
-            <Select value={cuisineFilter} onValueChange={setCuisineFilter}>
-              <SelectTrigger className="w-full md:w-[160px] h-11">
-                <SelectValue placeholder="Cuisine" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Cuisines</SelectItem>
-                <SelectItem value="Italian">Italian</SelectItem>
-                <SelectItem value="Mexican">Mexican</SelectItem>
-                <SelectItem value="Japanese">Japanese</SelectItem>
-                <SelectItem value="American">American</SelectItem>
-                <SelectItem value="Indian">Indian</SelectItem>
-              </SelectContent>
-            </Select>
 
-            <Select value={ratingFilter} onValueChange={setRatingFilter}>
-              <SelectTrigger className="w-full md:w-[140px] h-11">
-                <SelectValue placeholder="Rating" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any Rating</SelectItem>
-                <SelectItem value="4">4+ Stars</SelectItem>
-                <SelectItem value="3">3+ Stars</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button type="submit" className="h-11 px-8 hidden md:flex">Search</Button>
+          <div className="mt-8 space-y-8">
+            <label className="block">
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-white/[0.36]">
+                Search
+              </span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="City, address, cuisine, or restaurant"
+                className="etched-input"
+              />
+            </label>
+
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-white/[0.36]">
+                Cuisine type
+              </p>
+              <div className="space-y-3 text-sm text-[var(--text-muted)]">
+                {["Italian", "Japanese", "French", "Fusion"].map((cuisine, index) => (
+                  <label key={cuisine} className="flex items-center gap-3">
+                    <span
+                      className={`h-4 w-4 rounded-sm border ${
+                        index === 0
+                          ? "border-[#7ad5d6] bg-[#7ad5d6]"
+                          : "border-white/[0.16] bg-transparent"
+                      }`}
+                    />
+                    {cuisine}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-white/[0.36]">
+                Rating
+              </p>
+              <select className="field">
+                <option>4.5 and above</option>
+                <option>4.0 and above</option>
+                <option>3.5 and above</option>
+              </select>
+            </div>
+
+            <div className="overflow-hidden rounded-[22px] border border-white/[0.08]">
+              <div className="relative h-36">
+                <img
+                  src="https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=900&q=80"
+                  alt="Map view"
+                  className="h-full w-full object-cover brightness-50"
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/[0.14] bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur-md"
+                  >
+                    <Map className="h-3.5 w-3.5" />
+                    Show Map
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-          <Button type="submit" className="h-11 w-full md:hidden">Search</Button>
-        </form>
+        </aside>
+
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">
+                {loading ? "Loading restaurants" : `${filteredRestaurants.length} dining destinations`}
+              </h2>
+              <p className="mt-2 text-sm text-[var(--text-muted)]">
+                Filtered through the current Supabase-backed restaurant dataset.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" className="glass-card rounded-xl p-3 text-[#7ad5d6]">
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button type="button" className="glass-card-soft rounded-xl p-3 text-white/[0.36]">
+                <List className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="glass-card rounded-[28px] p-8 text-sm text-[var(--text-muted)]">
+              Loading restaurants…
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-2">
+              {filteredRestaurants.map((restaurant) => (
+                <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        </div>
-      ) : restaurants.length === 0 ? (
-        <div className="text-center py-20 border-2 border-dashed rounded-lg bg-muted/50">
-          <UtensilsCrossed className="w-10 h-10 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-xl font-medium">No restaurants found</h3>
-          <p className="text-muted-foreground mt-2">Try adjusting your filters or search query.</p>
-          <Button 
-            className="mt-4" 
-            variant="outline" 
-            onClick={() => {
-              setSearchQuery('');
-              setCuisineFilter('all');
-              setRatingFilter('all');
-              setSearchParams({});
-              // fetchRestaurants will hook on next render due to effect dependencies, but we should call it manually for input
-              setTimeout(fetchRestaurants, 0);
-            }}
-          >
-            Clear Filters
-          </Button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {restaurants.map(rest => (
-            <RestaurantCard 
-              key={rest.restaurant_id} 
-              restaurant={rest} 
-              avgRating={rest.avg_rating} 
-              reviewCount={rest.review_count} 
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Simple icon for empty state
-function UtensilsCrossed(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8" />
-      <path d="M15 15 3.3 3.3a4.2 4.2 0 0 0 0 6l7.3 7.3c.7.7 2 .7 2.8 0L15 15Zm0 0 7 7" />
-      <path d="m8.5 8.5 5 5" />
-      <path d="m14 14 7-7" />
-    </svg>
+    </section>
   );
 }

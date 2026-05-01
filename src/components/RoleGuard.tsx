@@ -1,21 +1,33 @@
-import { Navigate, Outlet } from 'react-router-dom';
-import { useAuthStore } from '../store/useAuthStore';
-import { type UserRole } from '../lib/supabase';
+import type { PropsWithChildren } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 
-export function ProtectedRoute({ allowedRoles }: { allowedRoles?: UserRole[] }) {
-  const { user, isLoading } = useAuthStore();
+import { useAuth, type UserRole } from "./AuthProvider";
 
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+type RoleGuardProps = PropsWithChildren<{
+  role?: UserRole;
+}>;
+
+export function RoleGuard({ children, role }: RoleGuardProps) {
+  const { profile, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="grid min-h-[50vh] place-items-center">
+        <div className="rounded-3xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-500 shadow-sm">
+          Loading your account…
+        </div>
+      </div>
+    );
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
+  if (!profile) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" replace />; // Redirect to home if not allowed
+  if (role && profile.role !== role) {
+    return <Navigate to="/dashboard" replace />;
   }
 
-  return <Outlet />;
+  return <>{children}</>;
 }

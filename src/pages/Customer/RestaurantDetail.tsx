@@ -1,254 +1,271 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { supabase, Restaurant, Review } from '../../lib/supabase';
-import { useAuthStore } from '../../store/useAuthStore';
-import { Button } from '../../components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../../components/ui/card';
-import { MapPin, Phone, Clock, Star, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { Calendar } from '../../components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { toast } from 'sonner';
+import { Calendar, Clock3, MapPin, Phone, Star, Users } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
-export default function RestaurantDetail() {
-  const { id } = useParams<{ id: string }>();
+import { useAuth } from "../../components/AuthProvider";
+import { createReservation, getRestaurantById, getReviews, type Restaurant, type Review } from "../../lib/supabase";
+import { toast } from "sonner";
+
+export function RestaurantDetailPage() {
+  const { restaurantId = "" } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  
+  const { accessToken, profile } = useAuth();
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Reservation state
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [time, setTime] = useState<string>('19:00');
-  const [partySize, setPartySize] = useState<string>('2');
-  const [booking, setBooking] = useState(false);
+  const [tab, setTab] = useState<"overview" | "reviews">("overview");
+  const [reservationDate, setReservationDate] = useState("");
+  const [reservationTime, setReservationTime] = useState("19:30");
+  const [partySize, setPartySize] = useState(2);
+  const [reserving, setReserving] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
-    
-    const fetchDetail = async () => {
-      setLoading(true);
-      try {
-        const { data: resData, error: resError } = await supabase
-          .from('restaurants')
-          .select('*')
-          .eq('restaurant_id', id)
-          .single();
-          
-        if (resError) throw resError;
-        setRestaurant(resData);
-        
-        const { data: revData, error: revError } = await supabase
-          .from('reviews')
-          .select(`
-            *,
-            users (name)
-          `)
-          .eq('restaurant_id', id)
-          .order('review_date', { ascending: false });
-          
-        if (!revError && revData) {
-          setReviews(revData);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchDetail();
-  }, [id]);
+    Promise.all([getRestaurantById(restaurantId), getReviews(restaurantId)])
+      .then(([restaurantResult, reviewResult]) => {
+        setRestaurant(restaurantResult);
+        setReviews(reviewResult);
+      })
+      .finally(() => setLoading(false));
+  }, [restaurantId]);
 
-  const handleReserve = async () => {
-    if (!user) {
-      toast('Please log in to make a reservation');
-      navigate('/login');
-      return;
+  useEffect(() => {
+    if (!reservationDate) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setReservationDate(tomorrow.toISOString().slice(0, 10));
     }
-    if (!date) {
-      toast.error('Please select a date');
-      return;
-    }
-
-    setBooking(true);
-    try {
-      const { error } = await supabase.from('reservations').insert({
-        user_id: user.user_id,
-        restaurant_id: id,
-        reservation_date: format(date, 'yyyy-MM-dd'),
-        reservation_time: time,
-        party_size: parseInt(partySize),
-        status: 'upcoming'
-      });
-
-      if (error) throw error;
-      
-      toast.success('Reservation confirmed!');
-      navigate('/customer/reservations');
-    } catch (e: any) {
-      toast.error(e.message || 'Failed making reservation');
-    } finally {
-      setBooking(false);
-    }
-  };
-
-  const avgRating = reviews.length ? reviews.reduce((a, b) => a + b.rating, 0) / reviews.length : 0;
+  }, [reservationDate]);
 
   if (loading) {
-    return <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
+    return <div className="glass-card rounded-[28px] p-8 text-sm text-[var(--text-muted)]">Loading restaurant…</div>;
   }
 
   if (!restaurant) {
-    return <div className="text-center py-20 text-muted-foreground">Restaurant not found.</div>;
+    return <div className="glass-card rounded-[28px] p-8 text-sm text-[var(--text-muted)]">Restaurant not found.</div>;
+  }
+
+  async function handleReserve() {
+    if (!accessToken) {
+      navigate("/login", { state: { from: `/restaurants/${restaurantId}` } });
+      return;
+    }
+
+    if (!reservationDate || !reservationTime || partySize < 1) {
+      toast.error("Choose a valid date, time, and party size.");
+      return;
+    }
+
+    setReserving(true);
+
+    try {
+      await createReservation(
+        {
+          restaurantId,
+          reservationDate,
+          reservationTime,
+          partySize,
+        },
+        accessToken,
+      );
+
+      toast.success(`Reservation confirmed for ${restaurant.name}.`);
+      navigate("/reservations");
+    } catch (error) {
+      console.error("Reservation create failed", error);
+      toast.error(
+        error instanceof Error ? error.message : "Unable to create reservation.",
+      );
+    } finally {
+      setReserving(false);
+    }
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column */}
-        <div className="lg:col-span-2 space-y-8">
-          <div className="aspect-video relative rounded-lg overflow-hidden bg-muted">
-             {restaurant.image_url ? (
-              <img src={restaurant.image_url} alt={restaurant.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground">No Image</div>
-            )}
-             <div className="absolute top-4 right-4 bg-background/90 px-3 py-1.5 rounded-full flex items-center shadow-lg font-bold">
-               <Star className="w-4 h-4 mr-1 fill-accent text-accent" />
-               {avgRating > 0 ? avgRating.toFixed(1) : 'New'}
-             </div>
-          </div>
-
-          <div>
-            <div className="flex justify-between items-start">
-              <div>
-                <h1 className="text-4xl font-bold tracking-tight text-foreground">{restaurant.name}</h1>
-                <p className="text-lg text-primary font-medium mt-1">{restaurant.cuisine_type} Cuisine</p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-4 mt-4 text-muted-foreground">
-              <div className="flex items-center"><MapPin className="w-4 h-4 mr-2"/> {restaurant.address}</div>
-              {restaurant.phone && <div className="flex items-center"><Phone className="w-4 h-4 mr-2"/> {restaurant.phone}</div>}
-              {restaurant.opening_hours && <div className="flex items-center"><Clock className="w-4 h-4 mr-2"/> {restaurant.opening_hours}</div>}
-            </div>
-
-            <p className="mt-6 text-foreground/80 leading-relaxed text-lg">
-              {restaurant.description || 'Enjoy a wonderful dining experience with us. Authentic flavors, great atmosphere, and excellent service.'}
+    <section className="space-y-8">
+      <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="space-y-6">
+          <img
+            src={restaurant.imageUrl}
+            alt={restaurant.name}
+            className="h-[380px] w-full rounded-[32px] object-cover shadow-[0_30px_90px_rgba(0,0,0,0.35)]"
+          />
+          <div className="glass-card rounded-[32px] p-7">
+            <p className="section-label">{restaurant.cuisine}</p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+              {restaurant.name}
+            </h1>
+            <p className="mt-4 flex items-center gap-2 text-sm text-[var(--text-muted)]">
+              <MapPin className="h-4 w-4" />
+              {restaurant.address}
             </p>
+            <p className="mt-6 max-w-3xl text-sm leading-7 text-[var(--text-muted)]">
+              {restaurant.description}
+            </p>
+
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
+              <InfoCard
+                icon={<Star className="h-4 w-4 fill-current" />}
+                label="Average rating"
+                value={restaurant.rating?.toFixed(1) ?? "New"}
+              />
+              <InfoCard
+                icon={<Phone className="h-4 w-4" />}
+                label="Phone"
+                value={restaurant.phone ?? "Available on request"}
+              />
+              <InfoCard
+                icon={<Calendar className="h-4 w-4" />}
+                label="Opening hours"
+                value={restaurant.opening_hours ?? "Daily service"}
+              />
+            </div>
           </div>
-
-          <Tabs defaultValue="reviews" className="w-full">
-            <TabsList>
-              <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger>
-              <TabsTrigger value="menu">Menu</TabsTrigger>
-            </TabsList>
-            <TabsContent value="reviews" className="space-y-4 mt-4">
-               {reviews.length === 0 ? (
-                 <p className="text-muted-foreground py-4 italic">No reviews yet. Be the first to review!</p>
-               ) : (
-                 reviews.map((review) => (
-                   <Card key={review.review_id} className="border-border/50">
-                     <CardHeader className="pb-2">
-                       <div className="flex justify-between items-start">
-                         <CardTitle className="text-base">{(review as any).users?.name || 'Anonymous'}</CardTitle>
-                         <div className="flex">
-                           {Array(5).fill(0).map((_, i) => (
-                             <Star key={i} className={`w-4 h-4 ${i < review.rating ? 'fill-accent text-accent' : 'text-muted'}`} />
-                           ))}
-                         </div>
-                       </div>
-                       <CardDescription>{new Date(review.review_date).toLocaleDateString()}</CardDescription>
-                     </CardHeader>
-                     <CardContent>
-                       <p className="text-sm">{review.comment}</p>
-                     </CardContent>
-                   </Card>
-                 ))
-               )}
-            </TabsContent>
-            <TabsContent value="menu">
-              <p className="text-muted-foreground py-4">Menu integration coming soon.</p>
-            </TabsContent>
-          </Tabs>
         </div>
 
-        {/* Right Column - Reservation Form */}
-        <div>
-          <Card className="sticky top-24 shadow-xl border-primary/20 border-2">
-            <CardHeader className="bg-primary/5 pb-6 border-b border-primary/10">
-              <CardTitle>Make a Reservation</CardTitle>
-              <CardDescription>Book your table directly online</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6 pt-6">
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Date</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal border-muted-foreground/30">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? format(date, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 z-50 bg-background" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={date}
-                      onSelect={setDate}
-                      initialFocus
-                      disabled={(d) => d < new Date(new Date().setHours(0,0,0,0))}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
+        <aside className="glass-card h-fit rounded-[32px] p-7 lg:sticky lg:top-28">
+          <h2 className="text-2xl font-semibold tracking-tight text-white">Reserve a table</h2>
+          <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">
+            Confirm date, time, and party size from the same screen.
+          </p>
+          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-white/[0.36]">
+            {profile ? `Booking as ${profile.fullName}` : "Sign in required to reserve"}
+          </p>
 
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Time</label>
-                  <Select value={time} onValueChange={setTime}>
-                    <SelectTrigger className="border-muted-foreground/30">
-                      <SelectValue placeholder="Time" />
-                    </SelectTrigger>
-                    <SelectContent className="z-50 bg-background">
-                      {['17:00','17:30','18:00','18:30','19:00','19:30','20:00','20:30','21:00'].map(t =>(
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                 </div>
-                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Party Size</label>
-                  <Select value={partySize} onValueChange={setPartySize}>
-                    <SelectTrigger className="border-muted-foreground/30">
-                      <SelectValue placeholder="People" />
-                    </SelectTrigger>
-                    <SelectContent className="z-50 bg-background">
-                      {[1,2,3,4,5,6,7,8,9,10].map(s =>(
-                        <SelectItem key={s} value={s.toString()}>{s} People</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                 </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                className="w-full py-6 text-lg font-bold" 
-                onClick={handleReserve}
-                disabled={booking}
+          <div className="mt-7 space-y-4">
+            <Field label="Date" icon={<Calendar className="h-4 w-4" />}>
+              <input
+                type="date"
+                className="field"
+                value={reservationDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={(event) => setReservationDate(event.target.value)}
+              />
+            </Field>
+            <Field label="Time" icon={<Clock3 className="h-4 w-4" />}>
+              <select
+                className="field"
+                value={reservationTime}
+                onChange={(event) => setReservationTime(event.target.value)}
               >
-                {booking ? 'Confirming...' : 'Reserve Table'}
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
+                <option value="18:00">6:00 PM</option>
+                <option value="19:30">7:30 PM</option>
+                <option value="20:00">8:00 PM</option>
+              </select>
+            </Field>
+            <Field label="Party size" icon={<Users className="h-4 w-4" />}>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={partySize}
+                onChange={(event) => setPartySize(Number(event.target.value))}
+                className="field"
+              />
+            </Field>
+            <button
+              type="button"
+              onClick={handleReserve}
+              disabled={reserving}
+              className="btn-gold mt-2 w-full disabled:opacity-60"
+            >
+              {reserving ? "Reserving…" : "Reserve"}
+            </button>
+          </div>
+        </aside>
       </div>
+
+      <div className="glass-card rounded-[32px] p-6">
+        <div className="flex flex-wrap gap-2">
+          {(["overview", "reviews"] as const).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setTab(item)}
+              className={
+                tab === item
+                  ? "rounded-full bg-[var(--brand-gold)] px-4 py-2 text-sm font-bold capitalize text-[var(--brand-navy)]"
+                  : "rounded-full border border-white/[0.1] bg-white/[0.06] px-4 py-2 text-sm font-medium capitalize text-[var(--text-muted)]"
+              }
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+
+        {tab === "overview" ? (
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="glass-card-soft rounded-[24px] p-5">
+              <p className="text-sm font-semibold text-white">About this venue</p>
+              <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">
+                This page now follows the same dark hospitality visual language as the landing and browse flow, while still reading its content from the current backend layer.
+              </p>
+            </div>
+            <div className="glass-card-soft rounded-[24px] p-5">
+              <p className="text-sm font-semibold text-white">Review preview</p>
+              <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">
+                {reviews.length} guest review{reviews.length === 1 ? "" : "s"} currently loaded for this restaurant.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-6 space-y-4">
+            {reviews.map((review) => (
+              <article key={review.id} className="glass-card-soft rounded-[24px] p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-white">{review.reviewerName}</p>
+                    <p className="text-sm text-[var(--text-muted)]">{review.createdAt}</p>
+                  </div>
+                  <div className="rounded-full bg-[rgba(253,160,41,0.14)] px-3 py-1 text-sm font-semibold text-[var(--brand-gold)]">
+                    {review.rating.toFixed(1)}
+                  </div>
+                </div>
+                <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">{review.comment}</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 flex items-center gap-2 text-sm font-medium text-white/[0.72]">
+        {icon}
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function InfoCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="glass-card-soft rounded-[24px] p-4">
+      <p className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-white/[0.36]">
+        {icon}
+        {label}
+      </p>
+      <p className="mt-3 text-lg font-semibold text-white">{value}</p>
     </div>
   );
 }

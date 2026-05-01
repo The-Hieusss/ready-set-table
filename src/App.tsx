@@ -1,48 +1,96 @@
-import { Routes, Route } from 'react-router-dom';
-import { AppShell } from '@/components/AppShell';
-import { ProtectedRoute } from '@/components/RoleGuard';
+import { Navigate, Route, Routes } from "react-router-dom";
 
-// Pages
-import Landing from '@/pages/Customer/Landing';
-import Login from '@/pages/Auth/Login';
-import Signup from '@/pages/Auth/Signup';
-import RestaurantList from '@/pages/Customer/RestaurantList';
-import RestaurantDetail from '@/pages/Customer/RestaurantDetail';
-import CustomerDashboard from '@/pages/Customer/Dashboard';
-import CustomerReservations from '@/pages/Customer/MyReservations';
-import OwnerDashboard from '@/pages/Owner/Dashboard';
-import OwnerRestaurants from '@/pages/Owner/MyRestaurants';
-import OwnerRestaurantForm from '@/pages/Owner/RestaurantForm';
-import OwnerReservationsList from '@/pages/Owner/ReservationsList';
-import OwnerReviewsList from '@/pages/Owner/ReviewsList';
+import { AppShell } from "./components/AppShell";
+import { RoleGuard } from "./components/RoleGuard";
+import { LoginPage } from "./pages/Auth/Login";
+import { SignupPage } from "./pages/Auth/Signup";
+import { CustomerDashboardPage } from "./pages/Customer/Dashboard";
+import { LandingPage } from "./pages/Customer/Landing";
+import { MyReservationsPage } from "./pages/Customer/MyReservations";
+import { RestaurantDetailPage } from "./pages/Customer/RestaurantDetail";
+import { RestaurantListPage } from "./pages/Customer/RestaurantList";
+import { OwnerDashboardPage } from "./pages/Owner/Dashboard";
+import MyRestaurants from "./pages/Owner/MyRestaurants";
+import RestaurantForm from "./pages/Owner/RestaurantForm";
+import OwnerReservationsList from "./pages/Owner/ReservationsList";
+import OwnerReviewsList from "./pages/Owner/ReviewsList";
 
 function App() {
   return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        
-        {/* Customer Routes */}
-        <Route element={<ProtectedRoute allowedRoles={['customer']} />}>
-          <Route path="/restaurants" element={<RestaurantList />} />
-          <Route path="/restaurants/:id" element={<RestaurantDetail />} />
-          <Route path="/customer/dashboard" element={<CustomerDashboard />} />
-          <Route path="/customer/reservations" element={<CustomerReservations />} />
-        </Route>
-
-        {/* Owner Routes */}
-        <Route element={<ProtectedRoute allowedRoles={['owner']} />}>
-          <Route path="/owner/dashboard" element={<OwnerDashboard />} />
-          <Route path="/owner/restaurants" element={<OwnerRestaurants />} />
-          <Route path="/owner/restaurants/new" element={<OwnerRestaurantForm />} />
-          <Route path="/owner/restaurants/:id/edit" element={<OwnerRestaurantForm />} />
-          <Route path="/owner/restaurants/:id/reservations" element={<OwnerReservationsList />} />
-          <Route path="/owner/restaurants/:id/reviews" element={<OwnerReviewsList />} />
-        </Route>
-      </Route>
-    </Routes>
+    <AppShell>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/restaurants" element={<RestaurantListPage />} />
+        <Route path="/restaurants/:restaurantId" element={<RestaurantDetailPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <RoleGuard>
+              <CustomerDashboardPage />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/reservations"
+          element={
+            <RoleGuard>
+              <MyReservationsPage />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/owner"
+          element={
+            <RoleGuard role="owner">
+              <OwnerDashboardPage />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/owner/restaurants"
+          element={
+            <RoleGuard role="owner">
+              <MyRestaurants />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/owner/restaurants/new"
+          element={
+            <RoleGuard role="owner">
+              <RestaurantForm />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/owner/restaurants/:id/edit"
+          element={
+            <RoleGuard role="owner">
+              <RestaurantForm />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/owner/restaurants/:id/reservations"
+          element={
+            <RoleGuard role="owner">
+              <OwnerReservationsList />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/owner/restaurants/:id/reviews"
+          element={
+            <RoleGuard role="owner">
+              <OwnerReviewsList />
+            </RoleGuard>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AppShell>
   );
 }
 

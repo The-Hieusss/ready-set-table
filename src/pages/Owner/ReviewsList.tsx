@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/button';
 import { ArrowLeft, Loader2, Star, MessageSquare } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
-type ReviewWithUser = Review & { users: { name: string, email: string } };
+type ReviewWithUser = Review & { users?: { full_name?: string } };
 
 export default function OwnerReviewsList() {
   const { id } = useParams<{ id: string }>();
@@ -15,11 +15,16 @@ export default function OwnerReviewsList() {
   const [restaurantName, setRestaurantName] = useState('');
 
   const fetchReviews = async () => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data: restData } = await supabase
         .from('restaurants')
         .select('name')
-        .eq('restaurant_id', id)
+        .eq('id', id)
         .single();
         
       if (restData) setRestaurantName(restData.name);
@@ -28,7 +33,7 @@ export default function OwnerReviewsList() {
         .from('reviews')
         .select(`
           *,
-          users ( name, email )
+          users ( full_name )
         `)
         .eq('restaurant_id', id)
         .order('review_date', { ascending: false });
@@ -84,12 +89,12 @@ export default function OwnerReviewsList() {
           </Card>
         ) : (
           reviews.map(rev => (
-            <Card key={rev.review_id} className="border-border/50 shadow-sm">
+            <Card key={rev.review_id ?? rev.id} className="border-border/50 shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
                   <div>
-                    <CardTitle className="text-lg">{rev.users?.name || 'Anonymous Customer'}</CardTitle>
-                    <CardDescription>{format(parseISO(rev.review_date), 'MMMM d, yyyy')}</CardDescription>
+                    <CardTitle className="text-lg">{rev.users?.full_name || 'Anonymous Customer'}</CardTitle>
+                    <CardDescription>{rev.review_date ? format(parseISO(rev.review_date), 'MMMM d, yyyy') : 'Unknown date'}</CardDescription>
                   </div>
                   <div className="flex">
                     {Array(5).fill(0).map((_, i) => (

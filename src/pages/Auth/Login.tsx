@@ -1,87 +1,88 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import { supabase } from '../../lib/supabase';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../components/ui/card';
-import { toast } from 'sonner';
+import { useAuth } from "../../components/AuthProvider";
 
-export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+export function LoginPage() {
+  const { signIn, loading } = useAuth();
   const navigate = useNavigate();
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        toast.error(error.message);
-      } else {
-        toast.success('Logged in successfully!');
-        // Context handle role routing, but let's go to root and let it redirect or handle
-        navigate('/');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'An error occurred during login.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const location = useLocation();
+  const redirectTo = (location.state as { from?: string } | null)?.from ?? "/dashboard";
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Welcome Back</CardTitle>
-          <CardDescription>Enter your credentials to access your account</CardDescription>
-        </CardHeader>
-        <form onSubmit={handleLogin}>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+    <section className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+      <div className="glass-card relative overflow-hidden rounded-[36px] p-8">
+        <div className="absolute inset-0">
+          <img
+            src="https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1200&q=80"
+            alt="Restaurant bar"
+            className="h-full w-full object-cover opacity-30"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,18,70,0.75),rgba(0,122,123,0.4),rgba(13,16,23,0.92))]" />
+        </div>
+        <div className="relative z-10">
+          <p className="section-label">Welcome back</p>
+          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-white">
+            Manage reservations without the noise
+          </h1>
+          <p className="mt-4 max-w-md text-sm leading-7 text-white/[0.72]">
+            Sign in to access bookings, guest activity, and operator tools from the redesigned hospitality dashboard.
+          </p>
+        </div>
+      </div>
+
+      <div className="glass-card rounded-[36px] p-8">
+        <h2 className="text-2xl font-semibold tracking-tight text-white">Log in</h2>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          Use your Supabase account credentials.
+        </p>
+
+        <form
+          className="mt-8 space-y-4"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setError(null);
+            const formData = new FormData(event.currentTarget);
+
+            try {
+              await signIn(
+                String(formData.get("email") ?? ""),
+                String(formData.get("password") ?? ""),
+              );
+              navigate(redirectTo, { replace: true });
+            } catch (caught) {
+              setError(caught instanceof Error ? caught.message : "Unable to log in.");
+            }
+          }}
+        >
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-white/[0.72]">Email</span>
+            <input name="email" type="email" className="field" placeholder="you@example.com" />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-white/[0.72]">Password</span>
+            <input name="password" type="password" className="field" placeholder="••••••••" />
+          </label>
+
+          {error ? (
+            <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+              {error}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Logging in...' : 'Log in'}
-            </Button>
-            <div className="text-sm text-center text-muted-foreground">
-              Don't have an account?{' '}
-              <Link to="/signup" className="text-primary hover:underline">
-                Sign up
-              </Link>
-            </div>
-          </CardFooter>
+          ) : null}
+
+          <button type="submit" disabled={loading} className="btn-gold w-full disabled:opacity-60">
+            {loading ? "Logging in…" : "Log in"}
+          </button>
         </form>
-      </Card>
-    </div>
+
+        <p className="mt-6 text-sm text-[var(--text-muted)]">
+          Need an account?{" "}
+          <Link to="/signup" className="font-medium text-[#7ad5d6]">
+            Sign up
+          </Link>
+        </p>
+      </div>
+    </section>
   );
 }

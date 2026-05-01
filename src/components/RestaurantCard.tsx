@@ -1,66 +1,69 @@
-import { Link } from 'react-router-dom';
-import { Card, CardContent, CardFooter, CardHeader } from './ui/card';
-import { Badge } from './ui/badge';
-import { Button } from './ui/button';
-import { MapPin, Star } from 'lucide-react';
-import { Restaurant } from '../lib/supabase';
+import { ArrowRight, MapPin, Star } from "lucide-react";
+import { Link } from "react-router-dom";
 
-interface RestaurantCardProps {
+import type { Restaurant } from "../lib/supabase";
+
+type RestaurantCardProps = {
   restaurant: Restaurant;
-  avgRating?: number;
-  reviewCount?: number;
+};
+
+function formatRating(rating?: number | null) {
+  if (typeof rating !== "number") {
+    return "New";
+  }
+
+  return rating.toFixed(1);
 }
 
-export function RestaurantCard({ restaurant, avgRating = 0, reviewCount = 0 }: RestaurantCardProps) {
+export function RestaurantCard({ restaurant }: RestaurantCardProps) {
   return (
-    <Card className="flex flex-col h-full overflow-hidden hover:shadow-lg transition-shadow border-border/50">
-      <div className="aspect-video relative overflow-hidden bg-muted">
-        {restaurant.image_url ? (
-          <img 
-            src={restaurant.image_url} 
-            alt={restaurant.name} 
-            className="object-cover w-full h-full hover:scale-105 transition-transform duration-500"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/50">
-            No Image Provided
-          </div>
-        )}
-        <div className="absolute top-2 right-2 flex gap-2">
-          <Badge className="bg-background text-foreground hover:bg-background/90 font-semibold shadow-sm">
-            <Star className="w-3 h-3 mr-1 fill-accent text-accent" />
-            {avgRating > 0 ? avgRating.toFixed(1) : 'New'}
-            <span className="text-muted-foreground font-normal ml-1">({reviewCount})</span>
-          </Badge>
+    <article className="glass-card specular-glow overflow-hidden rounded-[28px]">
+      <div className="relative h-64 overflow-hidden">
+        <img
+          src={restaurant.imageUrl}
+          alt={restaurant.name}
+          className="h-full w-full object-cover transition duration-700 hover:scale-105"
+        />
+        <div className="absolute left-4 top-4 rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs font-semibold text-[#7ad5d6] backdrop-blur-md">
+          {restaurant.cuisine}
         </div>
       </div>
-      
-      <CardHeader className="p-4 pb-2">
-        <div className="flex justify-between items-start gap-4">
-          <h3 className="font-bold text-xl line-clamp-1">{restaurant.name}</h3>
+      <div className="space-y-4 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-semibold tracking-tight text-white">
+              {restaurant.name}
+            </h3>
+            <p className="mt-1 flex items-center gap-2 text-sm text-(--text-muted)">
+              <MapPin className="h-3.5 w-3.5" />
+              {restaurant.address}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-[rgba(253,160,41,0.14)] px-3 py-2 text-sm font-semibold text-(--brand-gold)">
+            <span className="flex items-center gap-1">
+              <Star className="h-3.5 w-3.5 fill-current" />
+              {formatRating(restaurant.rating)}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center text-sm text-muted-foreground">
-          <MapPin className="w-4 h-4 mr-1 flex-shrink-0" />
-          <span className="line-clamp-1">{restaurant.address}</span>
-        </div>
-      </CardHeader>
 
-      <CardContent className="p-4 pt-0 flex-1">
-        <Badge variant="secondary" className="mt-2 text-primary bg-primary/10 hover:bg-primary/20">
-          {restaurant.cuisine_type}
-        </Badge>
-        <p className="mt-4 text-sm text-muted-foreground line-clamp-2">
-          {restaurant.description || 'Welcome to our restaurant!'}
+        <p className="line-clamp-3 text-sm leading-6 text-[var(--text-muted)]">
+          {restaurant.description}
         </p>
-      </CardContent>
 
-      <CardFooter className="p-4 pt-0">
-        <Button className="w-full font-semibold" asChild>
-          <Link to={`/restaurants/${restaurant.restaurant_id}`}>
-            View Details
+        <div className="flex items-center justify-between gap-4">
+          <div className="text-xs uppercase tracking-[0.24em] text-white/[0.36]">
+            {restaurant.city}
+          </div>
+          <Link
+            to={`/restaurants/${restaurant.id}`}
+            className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-gold)] px-4 py-2 text-sm font-bold text-[var(--brand-navy)] transition hover:opacity-90"
+          >
+            View details
+            <ArrowRight className="h-4 w-4" />
           </Link>
-        </Button>
-      </CardFooter>
-    </Card>
+        </div>
+      </div>
+    </article>
   );
 }

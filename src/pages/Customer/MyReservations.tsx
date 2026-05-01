@@ -1,153 +1,129 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { supabase, Reservation, Restaurant } from '../../lib/supabase';
-import { useAuthStore } from '../../store/useAuthStore';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { Card, CardContent } from '../../components/ui/card';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import { Calendar, Users, Clock, Loader2, Store } from 'lucide-react';
-import { format, isAfter, isPast, parseISO } from 'date-fns';
-import { toast } from 'sonner';
+import { useEffect, useMemo, useState } from "react";
 
-type ReservationWithRestaurant = Reservation & { restaurants: Restaurant };
+import { useAuth } from "../../components/AuthProvider";
+import { cancelReservation, getReservations, type Reservation } from "../../lib/supabase";
+import { toast } from "sonner";
 
-export default function MyReservations() {
-  const [searchParams] = useSearchParams();
-  const defaultTab = searchParams.get('tab') || 'upcoming';
-  
-  const { user } = useAuthStore();
-  const [reservations, setReservations] = useState<ReservationWithRestaurant[]>([]);
+type ReservationTab = "upcoming" | "completed" | "cancelled";
+
+export function MyReservationsPage() {
+  const { accessToken } = useAuth();
+  const [tab, setTab] = useState<ReservationTab>("upcoming");
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const fetchReservations = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('reservations')
-        .select(`
-          *,
-          restaurants (*)
-        `)
-        .eq('user_id', user.user_id)
-        .order('reservation_date', { ascending: true });
-
-      if (error) throw error;
-      setReservations(data as ReservationWithRestaurant[]);
-    } catch (error: any) {
-      toast.error('Failed to load reservations.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchReservations();
-  }, [user]);
+    getReservations(accessToken ?? undefined)
+      .then(setReservations)
+      .finally(() => setLoading(false));
+  }, [accessToken]);
 
-  const handleCancel = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('reservations')
-        .update({ status: 'cancelled' })
-        .eq('reservation_id', id);
+  const filtered = useMemo(
+    () => reservations.filter((reservation) => reservation.status === tab),
+    [reservations, tab],
+  );
 
-      if (error) throw error;
-      toast.success('Reservation cancelled');
-      fetchReservations();
-    } catch (e) {
-      toast.error('Could not cancel reservation');
+  async function handleCancelReservation(reservationId: string) {
+    if (!accessToken) {
+      toast.error("You must be signed in to cancel a reservation.");
+      return;
     }
-  };
 
-  const today = new Date();
-  
-  const upcoming = reservations.filter(r => 
-    r.status !== 'cancelled' && isAfter(parseISO(`${r.reservation_date}T${r.reservation_time}`), today)
-  );
-  
-  const past = reservations.filter(r => 
-    r.status !== 'cancelled' && isPast(parseISO(`${r.reservation_date}T${r.reservation_time}`))
-  );
+    setCancellingId(reservationId);
 
-  const cancelled = reservations.filter(r => r.status === 'cancelled');
+    try {
+      const updated = await cancelReservation(reservationId, accessToken);
 
-  const getStatusBadge = (res: ReservationWithRestaurant) => {
-    if (res.status === 'cancelled') return <Badge variant="destructive">Cancelled</Badge>;
-    if (isPast(parseISO(`${res.reservation_date}T${res.reservation_time}`))) return <Badge variant="secondary">Completed</Badge>;
-    return <Badge className="bg-primary hover:bg-primary/90">Upcoming</Badge>;
-  };
+      setReservations((current) =>
+        current.map((reservation) =>
+          reservation.id === reservationId && updated ? updated : reservation,
+        ),
+      );
 
-  if (loading) {
-    return <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
+      toast.success("Reservation cancelled.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to cancel reservation.",
+      );
+    } finally {
+      setCancellingId(null);
+    }
   }
 
-  const renderReservationCard = (res: ReservationWithRestaurant, isUpcoming: boolean) => (
-    <Card key={res.reservation_id} className="mb-4">
-      <CardContent className="p-6">
-        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              {getStatusBadge(res)}
-              <h3 className="text-xl font-bold flex items-center">
-                <Store className="w-5 h-5 mr-2 text-muted-foreground" />
-                {res.restaurants.name}
-              </h3>
-            </div>
-            
-            <div className="flex flex-wrap gap-6 text-muted-foreground font-medium">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                {format(parseISO(res.reservation_date), 'MMMM d, yyyy')}
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5" />
-                {res.reservation_time}
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                {res.party_size} People
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 min-w-[140px]">
-            {isUpcoming && <Button variant="destructive" onClick={() => handleCancel(res.reservation_id)}>Cancel</Button>}
-            {!isUpcoming && res.status !== 'cancelled' && (
-               <Button variant="outline" className="border-accent text-accent hover:bg-accent hover:text-foreground">Leave Review</Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold tracking-tight mb-8">My Reservations</h1>
-      
-      <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="past">Past</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-        </TabsList>
-        <TabsContent value="upcoming" className="mt-6">
-          {upcoming.length === 0 ? (
-            <p className="text-muted-foreground italic">No upcoming reservations.</p>
-          ) : upcoming.map(res => renderReservationCard(res, true))}
-        </TabsContent>
-        <TabsContent value="past" className="mt-6">
-          {past.length === 0 ? (
-            <p className="text-muted-foreground italic">No past reservations.</p>
-          ) : past.map(res => renderReservationCard(res, false))}
-        </TabsContent>
-        <TabsContent value="cancelled" className="mt-6">
-          {cancelled.length === 0 ? (
-            <p className="text-muted-foreground italic">No cancelled reservations.</p>
-          ) : cancelled.map(res => renderReservationCard(res, false))}
-        </TabsContent>
-      </Tabs>
-    </div>
+    <section className="space-y-8">
+      <div className="glass-card rounded-[32px] p-8">
+        <p className="section-label">Reservations & bookings</p>
+        <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+          My reservations
+        </h1>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(["upcoming", "completed", "cancelled"] as ReservationTab[]).map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => setTab(item)}
+            className={
+              tab === item
+                ? "rounded-full bg-[var(--brand-gold)] px-4 py-2 text-sm font-bold capitalize text-[var(--brand-navy)]"
+                : "rounded-full border border-white/[0.1] bg-white/[0.06] px-4 py-2 text-sm font-medium capitalize text-[var(--text-muted)]"
+            }
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="glass-card rounded-[28px] p-8 text-sm text-[var(--text-muted)]">
+          Loading reservations…
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {filtered.map((reservation) => (
+            <article
+              key={reservation.id}
+              className="glass-card grid gap-5 rounded-[28px] p-5 md:grid-cols-[1.3fr_1fr_auto]"
+            >
+              <div>
+                <p className="text-xl font-semibold tracking-tight text-white">
+                  {reservation.restaurantName}
+                </p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {reservation.date} at {reservation.time}
+                </p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                  Party size {reservation.partySize}
+                </p>
+              </div>
+              <div className="flex items-center">
+                <span className="rounded-full bg-[rgba(0,122,123,0.18)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#7ad5d6]">
+                  {reservation.status}
+                </span>
+              </div>
+              <div className="flex items-center justify-start md:justify-end">
+                {reservation.status === "upcoming" ? (
+                  <button
+                    type="button"
+                    disabled={cancellingId === reservation.id}
+                    onClick={() => void handleCancelReservation(reservation.id)}
+                    className="rounded-full border border-white/[0.12] bg-white/[0.06] px-4 py-2 text-sm font-medium text-white transition hover:border-[rgba(122,213,214,0.45)] hover:text-[#7ad5d6] disabled:opacity-60"
+                  >
+                    {cancellingId === reservation.id ? "Cancelling…" : "Cancel"}
+                  </button>
+                ) : (
+                  <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[var(--text-muted)]">
+                    {reservation.status === "completed" ? "Completed" : "Cancelled"}
+                  </span>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
