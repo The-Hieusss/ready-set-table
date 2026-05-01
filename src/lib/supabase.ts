@@ -323,7 +323,7 @@ function mapReview(row: Record<string, unknown>): Review {
 }
 
 export async function getAppUserByAuthUserId(authUserId: string, token?: string) {
-  const path = `users?select=id,user_id,full_name,role&user_id=eq.${authUserId}&limit=1`;
+  const path = `users?select=id,user_id,full_name,role&id=eq.${authUserId}&limit=1`;
   const rows = token
     ? await authedRestRequest<Record<string, unknown>[]>(path, token)
     : await restRequest<Record<string, unknown>[]>(path);

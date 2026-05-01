@@ -59,7 +59,6 @@ export function LandingPage() {
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(13,16,23,0.72),rgba(13,16,23,0.42),rgba(13,16,23,0.94))]" />
         </div>
         <div className="relative z-10 mx-auto flex min-h-180 max-w-5xl flex-col items-center justify-center px-6 py-16 text-center">
-          <p className="section-label">Guest landing page</p>
           <h1 className="mt-6 max-w-4xl text-balance text-5xl font-bold tracking-[-0.04em] text-white sm:text-6xl lg:text-7xl">
             Book your next table in minutes
           </h1>
