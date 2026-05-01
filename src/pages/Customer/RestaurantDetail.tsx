@@ -197,7 +197,7 @@ export function RestaurantDetailPage() {
             <div className="glass-card-soft rounded-[24px] p-5">
               <p className="text-sm font-semibold text-white">About this venue</p>
               <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">
-                This page now follows the same dark hospitality visual language as the landing and browse flow, while still reading its content from the current backend layer.
+                {restaurant.description}
               </p>
             </div>
             <div className="glass-card-soft rounded-[24px] p-5">

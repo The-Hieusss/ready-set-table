@@ -55,6 +55,8 @@ export type Review = {
   review_id?: string;
   restaurantId: string;
   restaurant_id?: string;
+  reservationId?: string;
+  reservation_id?: string;
   reviewerName: string;
   reviewer_name?: string;
   rating: number;
@@ -214,6 +216,61 @@ function mapRestaurant(row: Record<string, unknown>): Restaurant {
   };
 }
 
+function average(values: number[]) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+async function getReviewAverageMap(restaurantIds?: string[]) {
+  const ids = restaurantIds?.filter(Boolean) ?? [];
+  const filter =
+    ids.length > 0
+      ? `&restaurant_id=in.(${ids.join(",")})`
+      : "";
+
+  const rows = await restRequest<Record<string, unknown>[]>(
+    `reviews?select=restaurant_id,rating${filter}`,
+  );
+
+  const grouped = new Map<string, number[]>();
+
+  for (const row of rows) {
+    const restaurantId = row.restaurant_id ? String(row.restaurant_id) : null;
+    const rating = typeof row.rating === "number" ? row.rating : Number(row.rating);
+
+    if (!restaurantId || Number.isNaN(rating)) {
+      continue;
+    }
+
+    const current = grouped.get(restaurantId) ?? [];
+    current.push(rating);
+    grouped.set(restaurantId, current);
+  }
+
+  return new Map(
+    [...grouped.entries()].map(([restaurantId, ratings]) => [
+      restaurantId,
+      average(ratings),
+    ]),
+  );
+}
+
+async function withAverageRatings(restaurants: Restaurant[]) {
+  if (restaurants.length === 0) {
+    return restaurants;
+  }
+
+  const ratingMap = await getReviewAverageMap(restaurants.map((restaurant) => restaurant.id));
+
+  return restaurants.map((restaurant) => ({
+    ...restaurant,
+    rating: ratingMap.get(restaurant.id) ?? null,
+  }));
+}
+
 function mapReservation(row: Record<string, unknown>): Reservation {
   const restaurant = row.restaurants as { name?: unknown } | null | undefined;
   const rawStatus = String(row.status ?? "booked");
@@ -248,6 +305,8 @@ function mapReview(row: Record<string, unknown>): Review {
     id: String(row.id),
     restaurantId: String(row.restaurant_id ?? row.restaurantId ?? ""),
     restaurant_id: row.restaurant_id ? String(row.restaurant_id) : undefined,
+    reservationId: row.reservation_id ? String(row.reservation_id) : undefined,
+    reservation_id: row.reservation_id ? String(row.reservation_id) : undefined,
     reviewerName: String(
       users?.full_name ?? row.reviewer_name ?? row.reviewerName ?? "Guest",
     ),
@@ -335,7 +394,7 @@ export async function getRestaurants() {
   const rows = await restRequest<Record<string, unknown>[]>(
     "restaurants?select=id,owner_id,name,address,city,cuisine_type,description,phone,opening_hours,image_url,rating&order=name.asc",
   );
-  return rows.map(mapRestaurant);
+  return withAverageRatings(rows.map(mapRestaurant));
 }
 
 export async function getOwnerRestaurants(ownerId: string, token: string) {
@@ -343,7 +402,7 @@ export async function getOwnerRestaurants(ownerId: string, token: string) {
     `restaurants?select=id,owner_id,name,address,city,cuisine_type,description,phone,opening_hours,image_url,rating&owner_id=eq.${ownerId}&order=name.asc`,
     token,
   );
-  return rows.map(mapRestaurant);
+  return withAverageRatings(rows.map(mapRestaurant));
 }
 
 export async function getRestaurantById(restaurantId: string) {
@@ -352,7 +411,8 @@ export async function getRestaurantById(restaurantId: string) {
   );
 
   if (rows.length > 0) {
-    return mapRestaurant(rows[0]);
+    const [restaurant] = await withAverageRatings([mapRestaurant(rows[0])]);
+    return restaurant;
   }
 
   return null;
@@ -369,7 +429,8 @@ export async function getOwnedRestaurantById(
   );
 
   if (rows.length > 0) {
-    return mapRestaurant(rows[0]);
+    const [restaurant] = await withAverageRatings([mapRestaurant(rows[0])]);
+    return restaurant;
   }
 
   return null;
@@ -438,6 +499,25 @@ export async function getReviews(restaurantId?: string) {
   const rows = await restRequest<Record<string, unknown>[]>(
     `reviews?select=id,restaurant_id,user_id,reservation_id,rating,comment,review_date,created_at,users!reviews_user_id_fkey(full_name)${filter}&order=review_date.desc`,
   );
+  return rows.map(mapReview);
+}
+
+export async function getMyReviews(token?: string) {
+  if (!token) {
+    return [];
+  }
+
+  const appProfile = await getAppProfile(token);
+
+  if (!appProfile?.id) {
+    return [];
+  }
+
+  const rows = await authedRestRequest<Record<string, unknown>[]>(
+    `reviews?select=id,restaurant_id,user_id,reservation_id,rating,comment,review_date,created_at,users!reviews_user_id_fkey(full_name)&user_id=eq.${appProfile.id}&order=review_date.desc`,
+    token,
+  );
+
   return rows.map(mapReview);
 }
 
@@ -517,4 +597,62 @@ export async function cancelReservation(reservationId: string, token: string) {
   );
 
   return rows[0] ? mapReservation(rows[0]) : null;
+}
+
+export async function completeReservation(reservationId: string, token: string) {
+  const appProfile = await getAppProfile(token);
+
+  if (!appProfile?.id) {
+    throw new Error("You must be signed in to complete a reservation.");
+  }
+
+  const rows = await authedRestRequest<Record<string, unknown>[]>(
+    `reservations?id=eq.${reservationId}&user_id=eq.${appProfile.id}`,
+    token,
+    {
+      method: "PATCH",
+      headers: {
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        status: "completed",
+      }),
+    },
+  );
+
+  return rows[0] ? mapReservation(rows[0]) : null;
+}
+
+export async function createReview(
+  payload: {
+    restaurantId: string;
+    reservationId: string;
+    rating: number;
+    comment?: string;
+  },
+  token: string,
+) {
+  const appProfile = await getAppProfile(token);
+
+  if (!appProfile?.id) {
+    throw new Error("You must be signed in to leave a review.");
+  }
+
+  const rows = await authedRestRequest<Record<string, unknown>[]>("reviews", token, {
+    method: "POST",
+    headers: {
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify([
+      {
+        user_id: appProfile.id,
+        restaurant_id: payload.restaurantId,
+        reservation_id: payload.reservationId,
+        rating: payload.rating,
+        comment: payload.comment?.trim() ? payload.comment.trim() : null,
+      },
+    ]),
+  });
+
+  return rows[0] ? mapReview(rows[0]) : null;
 }

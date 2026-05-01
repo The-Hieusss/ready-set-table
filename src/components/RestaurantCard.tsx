@@ -34,12 +34,12 @@ export function RestaurantCard({ restaurant }: RestaurantCardProps) {
             <h3 className="text-xl font-semibold tracking-tight text-white">
               {restaurant.name}
             </h3>
-            <p className="mt-1 flex items-center gap-2 text-sm text-(--text-muted)">
+            <p className="mt-1 flex items-center gap-2 text-sm text-[var(--text-muted)]">
               <MapPin className="h-3.5 w-3.5" />
               {restaurant.address}
             </p>
           </div>
-          <div className="rounded-2xl bg-[rgba(253,160,41,0.14)] px-3 py-2 text-sm font-semibold text-(--brand-gold)">
+          <div className="rounded-2xl bg-[rgba(253,160,41,0.14)] px-3 py-2 text-sm font-semibold text-[var(--brand-gold)]">
             <span className="flex items-center gap-1">
               <Star className="h-3.5 w-3.5 fill-current" />
               {formatRating(restaurant.rating)}

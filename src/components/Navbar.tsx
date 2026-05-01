@@ -1,4 +1,4 @@
-import { Bell, Heart, Menu, X } from "lucide-react";
+import { Bell, Heart, Menu, Utensils, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
@@ -32,9 +32,7 @@ export function Navbar() {
         <div className="glass-card rounded-[28px] px-4 py-4 shadow-[0_24px_70px_rgba(0,0,0,0.35)] sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-3">
             <Link to="/" className="flex min-w-0 items-center gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/[0.12] bg-[linear-gradient(135deg,_#061246,_#007a7b)] text-sm font-semibold text-white shadow-[0_12px_30px_rgba(0,0,0,0.3)] sm:h-11 sm:w-11">
-                RT
-              </div>
+              <Utensils className="h-6 w-6 text-(--brand-gold)" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold tracking-tight text-white sm:text-base">
                   Ready Set Table
