@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, Clock3, MapPin, Star, UserRound, Users } from "lucide-react";
+import { ArrowRight,  Clock3, MapPin, Star, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 

@@ -68,7 +68,7 @@ export function RestaurantDetailPage() {
         accessToken,
       );
 
-      toast.success(`Reservation confirmed for ${restaurant.name}.`);
+      toast.success(`Reservation confirmed for ${restaurant?.name || "the restaurant"}.`);
       navigate("/reservations");
     } catch (error) {
       console.error("Reservation create failed", error);
