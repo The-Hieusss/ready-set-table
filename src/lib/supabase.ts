@@ -41,6 +41,8 @@ export type Reservation = {
   restaurant_id?: string;
   restaurantName: string;
   restaurant_name?: string;
+  customerName?: string;
+  customer_name?: string;
   date: string;
   reservation_date?: string | null;
   time: string;
@@ -273,6 +275,7 @@ async function withAverageRatings(restaurants: Restaurant[]) {
 
 function mapReservation(row: Record<string, unknown>): Reservation {
   const restaurant = row.restaurants as { name?: unknown } | null | undefined;
+  const users = row.users as { full_name?: unknown } | null | undefined;
   const rawStatus = String(row.status ?? "booked");
   const status =
     rawStatus === "cancelled"
@@ -288,6 +291,14 @@ function mapReservation(row: Record<string, unknown>): Reservation {
       restaurant?.name ?? row.restaurant_name ?? row.restaurantName ?? "Restaurant",
     ),
     restaurant_name: restaurant?.name ? String(restaurant.name) : undefined,
+    customerName: String(
+      users?.full_name ?? row.customer_name ?? row.customerName ?? "Guest",
+    ),
+    customer_name: users?.full_name
+      ? String(users.full_name)
+      : row.customer_name
+        ? String(row.customer_name)
+        : undefined,
     date: String(row.reservation_date ?? row.date ?? ""),
     reservation_date: row.reservation_date ? String(row.reservation_date) : undefined,
     time: String(row.reservation_time ?? row.time ?? ""),
@@ -538,6 +549,33 @@ export async function getReservations(token?: string) {
     token,
   );
   return rows.map(mapReservation);
+}
+
+export async function getOwnerReservations(
+  restaurantId: string,
+  ownerId: string,
+  token: string,
+) {
+  const restaurant = await getOwnedRestaurantById(restaurantId, ownerId, token);
+
+  if (!restaurant) {
+    throw new Error("Restaurant not found for this owner.");
+  }
+
+  const rows = await authedRestRequest<Record<string, unknown>[]>(
+    `reservations?select=id,user_id,restaurant_id,reservation_date,reservation_time,party_size,status,created_at,users!reservations_user_id_fkey(full_name)&restaurant_id=eq.${restaurantId}&order=reservation_date.desc`,
+    token,
+  );
+
+  return {
+    restaurant,
+    reservations: rows.map((row) =>
+      mapReservation({
+        ...row,
+        restaurants: { name: restaurant.name },
+      }),
+    ),
+  };
 }
 
 export async function createReservation(

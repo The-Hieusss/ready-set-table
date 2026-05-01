@@ -1,58 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { supabase, Reservation } from '../../lib/supabase';
+import { getOwnerReservations, type Reservation } from '../../lib/supabase';
+import { useAuth } from '../../components/AuthProvider';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { ArrowLeft, Loader2, Calendar } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-
-type ReservationWithUser = Reservation & { users?: { full_name?: string } };
+import { toast } from 'sonner';
 
 export default function OwnerReservationsList() {
   const { id } = useParams<{ id: string }>();
-  const [reservations, setReservations] = useState<ReservationWithUser[]>([]);
+  const { profile, accessToken } = useAuth();
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [restaurantName, setRestaurantName] = useState('');
 
-  const fetchReservations = async () => {
-    if (!id) {
+  const fetchReservations = useCallback(async () => {
+    if (!id || !profile || !accessToken) {
       setLoading(false);
       return;
     }
 
     try {
-      // Get restaurant name
-      const { data: restData } = await supabase
-        .from('restaurants')
-        .select('name')
-        .eq('id', id)
-        .single();
-        
-      if (restData) setRestaurantName(restData.name);
-
-      const { data, error } = await supabase
-        .from('reservations')
-        .select(`
-          *,
-          users ( full_name )
-        `)
-        .eq('restaurant_id', id)
-        .order('reservation_date', { ascending: false });
-        
-      if (error) throw error;
-      setReservations(data as unknown as ReservationWithUser[]);
+      const data = await getOwnerReservations(id, profile.id, accessToken);
+      setRestaurantName(data.restaurant.name);
+      setReservations(data.reservations);
     } catch (err) {
       console.error(err);
+      toast.error("Could not load reservations");
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken, id, profile]);
 
   useEffect(() => {
-    fetchReservations();
-  }, [id]);
+    void fetchReservations();
+  }, [fetchReservations]);
 
   if (loading) {
     return <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
@@ -99,7 +84,7 @@ export default function OwnerReservationsList() {
                 reservations.map(res => (
                   <TableRow key={res.reservation_id ?? res.id}>
                     <TableCell className="font-semibold">
-                      {res.users?.full_name || 'Unknown'}
+                      {res.customerName || res.customer_name || 'Unknown'}
                     </TableCell>
                     <TableCell>{res.reservation_date ? format(parseISO(res.reservation_date), 'MMM d, yyyy') : 'Unknown date'}</TableCell>
                     <TableCell>{res.reservation_time}</TableCell>

@@ -232,3 +232,24 @@ textarea {
   pointer-events: none;
   background: radial-gradient(circle at 50% 0%, rgba(253, 160, 41, 0.13), transparent 70%);
 }
+
+.loading-screen {
+  background:
+    radial-gradient(circle at 38% 30%, rgba(253, 160, 41, 0.18), transparent 24rem),
+    radial-gradient(circle at 64% 66%, rgba(0, 122, 123, 0.22), transparent 28rem),
+    rgba(8, 11, 18, 0.96);
+}
+
+.loading-screen__mark {
+  box-shadow:
+    0 0 0 8px rgba(253, 160, 41, 0.04),
+    0 18px 54px rgba(253, 160, 41, 0.16);
+}
+
+.loading-screen__dot {
+  display: block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 9999px;
+  background: #7ad5d6;
+}
